@@ -8,6 +8,7 @@ import type { TransitionContext } from './orchestrator/transitions.js';
 import type { SecurityReport } from './output/report-schema.js';
 
 import { SwarmCoordinator } from './hivemind/swarm-coordinator.js';
+import { MCPClient, type MCPToken } from './mcp-client.js';
 import { createChromeDevtoolsAdapter } from './mcp/adapters/chrome-devtools.js';
 import { createKaliLinuxAdapter } from './mcp/adapters/kali-linux.js';
 import { MCPManager } from './mcp/manager.js';
@@ -47,7 +48,7 @@ export interface AgentSessionOptions {
 }
 
 export interface AgentStreamEvent {
-  kind: 'status' | StreamActivity['kind'];
+  kind: 'mcp_action' | 'mcp_thought' | 'status' | StreamActivity['kind'];
   message: string;
   timestamp: string;
   toolCallId?: string;
@@ -126,10 +127,12 @@ export class AgentSession {
   private diffScopeHint: string;
   private expertUnsafe: boolean;
   private initialized: Promise<void>;
+  private mcpClient: MCPClient | null = null;
   private mcpManager: MCPManager | null = null;
   private messages: ModelMessage[] = [];
   private missionEngine: MissionEngine | null = null;
   private model: LanguageModel;
+  private readonly repoMapData: string;
   private runtime: RuntimeSettings;
   private runtimeWarnings: string[] = [];
   private semanticIndex: null | SemanticIndex = null;
@@ -142,6 +145,7 @@ export class AgentSession {
     private readonly targetPath: string,
     options: AgentSessionOptions = {},
   ) {
+    this.repoMapData = repoMap;
     this.model = getModel(config);
     this.expertUnsafe = options.expertUnsafe ?? config.expertUnsafe ?? false;
     this.diffScopeHint = options.diffScopeHint ?? '';
@@ -198,6 +202,13 @@ Use your tools to inspect implementation details, verify assumptions, and produc
         timestamp: new Date().toISOString(),
       });
     };
+
+    // --- MCP AUTONOMOUS SWARM TRIGGER ---
+    if (userMessage.toLowerCase().includes('autonomous audit') || userMessage.toLowerCase().includes('deep-sast')) {
+      emitEvent({ kind: 'status', message: 'Switching to Autonomous Swarm mode via MCP bridge...' });
+      return this.runAutonomousAudit(userMessage, onChunk, emitEvent);
+    }
+
 
     const timestamp = new Date().toISOString();
     this.messages.push({
@@ -766,6 +777,36 @@ Return corrected JSON now.`;
         });
       }
     }
+  }
+
+  private async runAutonomousAudit(
+    userMessage: string,
+    onChunk: (text: string) => void,
+    emitEvent: (event: Omit<AgentStreamEvent, 'timestamp'>) => void,
+  ): Promise<string> {
+    if (!this.mcpClient) {
+      this.mcpClient = new MCPClient();
+    }
+
+    await this.mcpClient.connect();
+
+    this.mcpClient.on('token', (token: MCPToken) => {
+      const eventKind = token.type === 'thought' ? 'mcp_thought' : 'mcp_action';
+      emitEvent({ kind: eventKind, message: token.content });
+      onChunk(`\n[${token.type.toUpperCase()}] ${token.content}\n`);
+    });
+
+    const apiKeys = {
+      anthropic: this.config.apiKey,
+      openai: this.config.apiKey,
+    };
+
+    emitEvent({ kind: 'status', message: 'Launching Adversarial Swarm via MCP bridge...' });
+    // We pass the saved repoMapData to the Python MCP server
+    const auditId = await this.mcpClient.startAutonomousAudit({ map: this.repoMapData }, apiKeys);
+
+    emitEvent({ kind: 'status', message: `Autonomous Audit ${auditId} is now running in the background.` });
+    return `Autonomous audit ${auditId} started. Reasoning and actions are being streamed.`;
   }
 
   private async startMissionCycle(userMessage: string): Promise<null | string> {
