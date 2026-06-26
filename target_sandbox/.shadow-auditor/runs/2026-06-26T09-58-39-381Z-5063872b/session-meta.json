@@ -1,0 +1,13 @@
+{
+  "maxOutputTokens": 16000,
+  "maxToolSteps": 12,
+  "mcpEnabled": false,
+  "model": "gemini-3-flash-preview",
+  "provider": "google",
+  "targetPath": "/workspaces/shadow-aegis/target_sandbox",
+  "warnings": [
+    "Report validation fallback applied: Failed after 3 attempts. Last error: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+  ],
+  "runId": "2026-06-26T09-58-39-381Z-5063872b",
+  "startedAt": "2026-06-26T09:58:39.381Z"
+}

@@ -11,6 +11,7 @@ import { SwarmCoordinator } from './hivemind/swarm-coordinator.js';
 import { createChromeDevtoolsAdapter } from './mcp/adapters/chrome-devtools.js';
 import { createKaliLinuxAdapter } from './mcp/adapters/kali-linux.js';
 import { MCPManager } from './mcp/manager.js';
+import { MCPClient, type MCPToken } from './mcp/client.js';
 import { vulnerabilityCanonicalId } from './memory/entity-normalizer.js';
 import { HybridRetriever } from './memory/hybrid-retriever.js';
 import {
@@ -20,7 +21,7 @@ import {
   OpenAIEmbeddingProvider,
   SemanticIndex,
 } from './memory/semantic-index.js';
-import { resolveRuntimeSettings, type RuntimeSettings } from './model-capabilities.js';
+import resolveRuntimeSettings, { type RuntimeSettings } from './model-capabilities.js';
 import { getModel } from './model-router.js';
 import { MissionEngine } from './orchestrator/mission-engine.js';
 import { computeCiExitCode, type FailOnSeverity, formatCiSummary } from './output/ci-exit.js';
@@ -47,7 +48,7 @@ export interface AgentSessionOptions {
 }
 
 export interface AgentStreamEvent {
-  kind: 'status' | StreamActivity['kind'];
+  kind: 'status' | 'mcp_thought' | 'mcp_action' | StreamActivity['kind'];
   message: string;
   timestamp: string;
   toolCallId?: string;
@@ -127,6 +128,7 @@ export class AgentSession {
   private expertUnsafe: boolean;
   private initialized: Promise<void>;
   private mcpManager: MCPManager | null = null;
+  private mcpClient: MCPClient | null = null;
   private messages: ModelMessage[] = [];
   private missionEngine: MissionEngine | null = null;
   private model: LanguageModel;
@@ -138,7 +140,7 @@ export class AgentSession {
 
   constructor(
     private readonly config: ShadowConfig,
-    repoMap: string,
+    private readonly repoMap: string,
     private readonly targetPath: string,
     options: AgentSessionOptions = {},
   ) {
@@ -199,6 +201,16 @@ Use your tools to inspect implementation details, verify assumptions, and produc
       });
     };
 
+    // --- MCP Autonomous Mode Trigger ---
+    if (userMessage.toLowerCase().includes('autonomous audit') || userMessage.toLowerCase().includes('deep-sast')) {
+      emitEvent({ kind: 'status', message: 'Switching to Autonomous Swarm mode via MCP bridge...' });
+      try {
+        return await this.runAutonomousAudit(userMessage, onChunk, emitEvent);
+      } catch (error) {
+        throw new Error(`Autonomous audit failed: ${(error as Error).message}`);
+      }
+    }
+
     const timestamp = new Date().toISOString();
     this.messages.push({
       content: userMessage,
@@ -209,6 +221,7 @@ Use your tools to inspect implementation details, verify assumptions, and produc
       role: 'user',
       timestamp,
     });
+    // ... (rest of the existing sendMessage logic)
 
     if (this.config.swarm?.enabled) {
       emitEvent({ kind: 'status', message: 'Planning Swarm analysis mission' });
@@ -409,6 +422,64 @@ Return corrected JSON now.`;
     emitEvent({ kind: 'status', message: 'Analysis complete' });
 
     return streamResult.text;
+  }
+
+  private async runAutonomousAudit(
+    userMessage: string,
+    onChunk: (text: string) => void,
+    emitEvent: (event: Omit<AgentStreamEvent, 'timestamp'>) => void,
+  ): Promise<string> {
+    if (!this.mcpClient) {
+      this.mcpClient = new MCPClient();
+    }
+
+    try {
+      await this.mcpClient.connect();
+
+      // Map MCP tokens to AgentStreamEvents for the UI
+      this.mcpClient.on('token', (token: MCPToken) => {
+        const eventKind = token.type === 'thought' ? 'mcp_thought' : 'mcp_action';
+        emitEvent({
+          kind: eventKind,
+          message: token.content,
+        });
+        // Also send as a chunk for the main response buffer
+        onChunk(`\n[${token.type.toUpperCase()}] ${token.content}\n`);
+      });
+
+      // Gather API keys from config (handled by KeychainAdapter internally in config load)
+      const apiKeys = {
+        openai: this.config.apiKey,
+        anthropic: this.config.apiKey, // Simplified for prototype
+      };
+
+      // Parse repoMap if it's a string, or pass as is
+      const repoMapPayload = typeof this.repoMap === 'string' 
+        ? { map: this.repoMap } 
+        : this.repoMap;
+
+      emitEvent({ kind: 'status', message: 'Launching Adversarial Swarm via MCP bridge...' });
+      const auditId = await this.mcpClient.startAutonomousAudit(repoMapPayload, apiKeys);
+      
+      emitEvent({ kind: 'status', message: `Autonomous Audit ${auditId} is now running in the background.` });
+      
+      // In a real implementation, we would wait for a final result event from the server.
+      // For now, we return a confirmation that the audit has started and is streaming.
+      return `Autonomous audit ${auditId} started successfully. Reasoning and actions are being streamed to the activity panel.`;
+
+    } catch (error) {
+      throw error;
+    } finally {
+      // We don't disconnect immediately because the audit runs in the background on the server
+      // and streams tokens. We disconnect during session disposal.
+    }
+  }
+
+  async dispose(): Promise<void> {
+    if (this.mcpClient) {
+      await this.mcpClient.disconnect();
+      this.mcpClient = null;
+    }
   }
 
   private async completeMissionCycle(

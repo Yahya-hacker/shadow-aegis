@@ -20,9 +20,7 @@ export class MCPClient extends EventEmitter {
   private buffer: string = '';
   private requestId = 0;
 
-  constructor(private pythonPath: string = 'python3') {
-    super();
-  }
+  constructor(private pythonPath: string = 'python3') {}
 
   /**
    * Spawns the MCP server and sets up the stdio bridge.
@@ -62,7 +60,8 @@ export class MCPClient extends EventEmitter {
    */
   private handleData(data: string): void {
     this.buffer += data;
-    const lines = this.buffer.split('\n');
+    const lines = this.buffer.split('
+');
     
     // Keep the last partial line in the buffer
     this.buffer = lines.pop() || '';
@@ -101,7 +100,8 @@ export class MCPClient extends EventEmitter {
         id,
       };
 
-      this.child?.stdin?.write(JSON.stringify(request) + '\n');
+      this.child?.stdin?.write(JSON.stringify(request) + '
+');
 
       const responseHandler = (response: MCPResponse) => {
         if (response.id === id) {

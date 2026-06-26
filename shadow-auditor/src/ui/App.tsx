@@ -38,6 +38,7 @@ type Message = {
 type ActivityEventLine = {
   id: string;
   text: string;
+  kind: AgentStreamEvent['kind'];
 };
 
 const MAX_ACTIVITY_EVENTS = 40;
@@ -53,6 +54,14 @@ function formatActivityLine(event: AgentStreamEvent): string {
 
     case 'tool_result': {
       return `${timestamp} ✓ ${event.message}${toolSuffix}`;
+    }
+
+    case 'mcp_thought': {
+      return `${timestamp} 💭 ${event.message}`;
+    }
+
+    case 'mcp_action': {
+      return `${timestamp} ⚡ ${event.message}`;
     }
 
     default: {
@@ -73,11 +82,23 @@ const ActivityStreamPanel = ({
     {activityEvents.length === 0 && isProcessing && (
       <Text color="gray">Waiting for first tool or status event...</Text>
     )}
-    {activityEvents.slice(-8).map((event) => (
-      <Text color="gray" key={event.id}>
-        {event.text}
-      </Text>
-    ))}
+    {activityEvents.slice(-8).map((event) => {
+      let color = 'gray';
+      let isItalic = false;
+
+      if (event.kind === 'mcp_action') {
+        color = 'cyan';
+      } else if (event.kind === 'mcp_thought') {
+        color = 'gray';
+        isItalic = true;
+      }
+
+      return (
+        <Text color={color} key={event.id}>
+          {isItalic ? `\x1b[3m${event.text}\x1b[0m` : event.text}
+        </Text>
+      );
+    })}
   </Box>
 );
 
@@ -374,6 +395,7 @@ const App = ({
             ...prev,
             {
               id: `activity-${activityEventCounter.current}`,
+              kind: event.kind,
               text: line,
             },
           ].slice(-MAX_ACTIVITY_EVENTS));
