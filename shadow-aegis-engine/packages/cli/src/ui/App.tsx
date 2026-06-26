@@ -47,16 +47,19 @@ function formatActivityLine(event: AgentStreamEvent): string {
   const toolSuffix = event.toolName ? ` [${event.toolName}]` : '';
 
   switch (event.kind) {
-    case 'tool_call': {
-      return `${timestamp} ▶ ${event.message}${toolSuffix}`;
+    case 'mcp_action': { return `${timestamp} ⚡ ${event.message}`;
     }
 
-    case 'tool_result': {
-      return `${timestamp} ✓ ${event.message}${toolSuffix}`;
+    case 'mcp_thought': { return `${timestamp} 💭 ${event.message}`;
     }
 
-    default: {
-      return `${timestamp} • ${event.message}${toolSuffix}`;
+    case 'tool_call': { return `${timestamp} ▶ ${event.message}${toolSuffix}`;
+    }
+
+    case 'tool_result': { return `${timestamp} ✓ ${event.message}${toolSuffix}`;
+    }
+
+    default: { return `${timestamp} • ${event.message}${toolSuffix}`;
     }
   }
 }
@@ -73,11 +76,23 @@ const ActivityStreamPanel = ({
     {activityEvents.length === 0 && isProcessing && (
       <Text color="gray">Waiting for first tool or status event...</Text>
     )}
-    {activityEvents.slice(-8).map((event) => (
-      <Text color="gray" key={event.id}>
-        {event.text}
-      </Text>
-    ))}
+    {activityEvents.slice(-8).map((event) => {
+      let color = 'gray';
+      let isItalic = false;
+
+      if (event.text.includes('💭')) {
+        color = 'gray';
+        isItalic = true;
+      } else if (event.text.includes('⚡')) {
+        color = 'cyan';
+      }
+
+      return (
+        <Text color={color} key={event.id}>
+          {isItalic ? `\u001B[3m${event.text}\u001B[0m` : event.text}
+        </Text>
+      );
+    })}
   </Box>
 );
 
