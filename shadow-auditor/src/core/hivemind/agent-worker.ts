@@ -9,6 +9,7 @@ import { type Blackboard } from './blackboard.js';
 import { type AgentRole, type ModelTier, type Task } from './hivemind-schema.js';
 import { buildWorkerSystemPrompt } from './worker-prompts.js';
 import { createRoleToolSet } from './worker-toolsets.js';
+import { createBlackboardTools } from './blackboard-tools.js';
 
 export interface AgentWorkerOptions {
   agentId: string;
@@ -50,13 +51,21 @@ export class AgentWorker {
     this.role = options.role;
     this.model = options.model;
     this.blackboard = options.blackboard;
-    this.tools = createRoleToolSet(options.role, options.allTools);
+    this.modelTier = options.modelTier ?? 'standard';
+    this.trustScore = options.trustScore ?? 0.7;
+    const roleTools = createRoleToolSet(options.role, options.allTools);
+    const blackboardTools = createBlackboardTools({
+      agentId: this.agentId,
+      blackboard: this.blackboard,
+      modelTier: this.modelTier,
+      trustScore: this.trustScore,
+    });
+    this.tools = { ...roleTools, ...blackboardTools };
     this.maxOutputTokens = options.maxOutputTokens ?? 4096;
     this.maxToolSteps = options.maxToolSteps ?? 10;
     this.auditMode = options.auditMode ?? 'sast';
     this.diffScopeHint = options.diffScopeHint ?? '';
-    this.modelTier = options.modelTier ?? 'standard';
-    this.trustScore = options.trustScore ?? 0.7;
+
     
     this.systemPrompt = buildWorkerSystemPrompt(options.role, {
       auditMode: this.auditMode,

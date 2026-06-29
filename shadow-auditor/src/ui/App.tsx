@@ -56,14 +56,6 @@ function formatActivityLine(event: AgentStreamEvent): string {
       return `${timestamp} ✓ ${event.message}${toolSuffix}`;
     }
 
-    case 'mcp_thought': {
-      return `${timestamp} 💭 ${event.message}`;
-    }
-
-    case 'mcp_action': {
-      return `${timestamp} ⚡ ${event.message}`;
-    }
-
     default: {
       return `${timestamp} • ${event.message}${toolSuffix}`;
     }
@@ -86,12 +78,6 @@ const ActivityStreamPanel = ({
       let color = 'gray';
       let isItalic = false;
 
-      if (event.kind === 'mcp_action') {
-        color = 'cyan';
-      } else if (event.kind === 'mcp_thought') {
-        color = 'gray';
-        isItalic = true;
-      }
 
       return (
         <Text color={color} key={event.id}>

@@ -24,8 +24,7 @@ export function createFinishTaskTool() {
       summary: z
         .string()
         .min(1, 'Summary cannot be empty.')
-        .max(1000, 'Summary exceeds maximum length of 1000 characters.')
-        .describe('Concise summary of what was accomplished (max 1000 characters).'),
+        .describe('Concise summary of what was accomplished, or output data.'),
     }),
   });
 }

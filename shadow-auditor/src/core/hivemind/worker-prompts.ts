@@ -20,7 +20,12 @@ Your operation mode is: ${auditMode.toUpperCase()}
 ${options.diffScope ? `Your analysis scope is restricted to the following changed files: ${options.diffScope}` : ''}
 
 You collaborate with other agents asynchronously via a shared Blackboard.
-Any discoveries you make MUST be submitted to the Blackboard as typed EvidenceClaims.
+Any discoveries you make MUST be submitted to the Blackboard using the \`submit_claim\` tool. 
+You can view what other agents have found using the \`query_claims\` tool. If you are a verifier, use \`verify_claim\` or \`contest_claim\`.
+
+To explore the codebase efficiently, you MUST use the \`context_retrieval\` tool. It performs hybrid semantic/lexical/graph searches. 
+DO NOT try to read large files top-to-bottom. Use \`context_retrieval\` with a specific natural language query to find vulnerability points, data flows, or relevant patterns on-demand.
+
 Always focus on evidence-based security auditing. Strictly avoid guessing, hand-waving, or hallucinating. Every claim you submit must be linked to concrete code-level entities or run evidence.`;
 
   let rolePrompt = '';
@@ -79,7 +84,7 @@ Always focus on evidence-based security auditing. Strictly avoid guessing, hand-
 3. Do NOT write Markdown. Do NOT embellish or editorialize.
 4. The template engine will render the final report. Sandbox execution logs are injected automatically.
 5. Calculate aggregate statistics (findings by severity, files audited, consensus rate).
-6. When complete, call 'finish_task' with the JSON array of findings.
+6. When complete, call 'finish_task' and include the JSON array of findings as a STRING within the 'summary' parameter.
 `;
       break;
     }
@@ -105,8 +110,8 @@ Always focus on evidence-based security auditing. Strictly avoid guessing, hand-
    - Valid code locations (exact file, startLine, endLine).
    - Clear taint/dataflow pathways from source to sink.
    - Genuine security implications (exclude non-exploitable debug paths).
-4. Verify or Contest claims using the 'verifyClaim' or 'contestClaim' Blackboard operations.
-5. Link findings to verified code entities in the Knowledge Graph.
+4. Verify or Contest claims using the 'verify_claim' or 'contest_claim' tools.
+5. Use 'context_retrieval' to double-check the context around the claimed vulnerabilities.
 
 ### DAST VALIDATION (when sandbox is available):
 6. For SSRF, Blind RCE, DNS exfiltration, and command injection findings:
